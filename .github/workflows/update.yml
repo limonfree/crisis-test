@@ -45,6 +45,36 @@ jobs:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
         run: |
           python -u collect.py
+      
+      - name: Verify fresh calculation
+        run: |
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone, timedelta
+
+          with open("data/latest.json", encoding="utf-8") as f:
+              data = json.load(f)
+
+          generated = datetime.fromisoformat(
+              data["generated_at"].replace("Z", "+00:00")
+          )
+          age = datetime.now(timezone.utc) - generated
+
+          assert timedelta(0) <= age < timedelta(minutes=40), (
+              f"latest.json is stale: {age}"
+          )
+
+          warning = data.get("crypto_early_warning")
+          assert isinstance(warning, dict), (
+              "crypto_early_warning is missing"
+          )
+          assert warning.get("state") in (
+              "low", "elevated", "high", "unknown"
+          ), "Invalid early warning state"
+
+          print("Fresh data verified:", data["generated_at"])
+          print("Early warning:", warning["state"])
+          PY
 
       - name: Validate generated JSON
         run: |
